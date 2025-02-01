@@ -1,9 +1,9 @@
 
 import pandas as pd
 
-filepath_train = 'SAAA_train.csv' #Training Set: The largest split of the dataset, and the one without any ground truth ("gold") labels. We will generate labels for these data points with weak supervision.
+filepath_train = './dataset/SAAA_train.csv' #Training Set: The largest split of the dataset, and the one without any ground truth ("gold") labels. We will generate labels for these data points with weak supervision.
 
-filepath_test = 'SAAA_test.csv' #Test Set: A small, standard held-out blind hand-labeled set for final evaluation of our classifier. This set should only be used for evaluation, not error analysis
+filepath_test = './dataset/SAAA_test.csv' #Test Set: A small, standard held-out blind hand-labeled set for final evaluation of our classifier. This set should only be used for evaluation, not error analysis
 
 df_train = pd.read_csv(filepath_train)
 df_test = pd.read_csv(filepath_test)
@@ -16,7 +16,7 @@ df_test.head(5)
 Y_test = df_test.label.values
 Y_test
 
-df_train['label'].value_counts() #this dataset considerd unlabeled, since all entries have the label -1, indicating abstention or uncertnity.
+df_train['label'].value_counts() # this dataset considerd unlabeled, since all entries have the label -1, indicating abstention or uncertnity.
 
 """# Weak Labelling
 
@@ -24,9 +24,9 @@ df_train['label'].value_counts() #this dataset considerd unlabeled, since all en
 """
 
 # For clarity, we define constants for sentiment labels: Negative = 0, Positive = 1
-MIXED = -1   #uncertain comment = غير محدد
+ABSTAIN = -1   #Uncertain comment = غير محدد
 NEGATIVE = 1 #Negative comment = تعليق سلبي
-POSITIVE = 0 #postive comment = تعليق ايحابي
+POSITIVE = 0 #Postive comment = تعليق ايحابي
 
 """# Define labeling functions"""
 
@@ -37,7 +37,7 @@ from snorkel.analysis import get_label_buckets
 
 from camel_tools.tokenizers.word import simple_word_tokenize
 @labeling_function()
-def keyword_sentiment(x):
+def keyword_sentiment(x): # keyword_sentiment: This labeling function assigns a sentiment label based on the presence of keywords in the text.
     negative_keywords = ['سيء', 'غير جيد', 'مزعج']
     positive_keywords = ['جيد', 'رائع', 'ممتاز']
 
@@ -45,33 +45,33 @@ def keyword_sentiment(x):
         return NEGATIVE
     elif any(word in simple_word_tokenize(x.text) for word in positive_keywords):
         return POSITIVE
-    return MIXED
+    return ABSTAIN
 keyword_sentiment.name = "keyword_sentiment"
 
 # Writing an LF to gauge sentiment - that uses a third-party model
 from snorkel.preprocess import preprocessor
 from textblob import TextBlob
 @preprocessor(memoize=True)
-def textblob_sentiment(x):
+def textblob_sentiment(x): # textblob_sentiment: This preprocessor uses TextBlob to analyze the sentiment of the text: It calculates the polarity (positive or negative sentiment) and subjectivity (subjective or objective nature) of the text.
     scores = TextBlob(x.text)
     x.polarity = scores.sentiment.polarity
     x.subjectivity = scores.sentiment.subjectivity
     return x
 
 @labeling_function(pre=[textblob_sentiment]) # The pre=[textblob_sentiment] argument indicates that the textblob_sentiment preprocessor should be applied before textblob_polarity is executed.
-def textblob_polarity(x):
-    return POSITIVE if x.polarity > 0.9 else MIXED
+def textblob_polarity(x): # If the polarity is greater than 0.9, it assigns POSITIVE.
+    return POSITIVE if x.polarity > 0.9 else ABSTAIN
 
 @labeling_function(pre=[textblob_sentiment])
-def textblob_subjectivity(x):
-    return POSITIVE if x.subjectivity >= 0.5 else MIXED
+def textblob_subjectivity(x): #  If subjectivity is greater than or equal to 0.5, it assigns POSITIVE.
+    return POSITIVE if x.subjectivity >= 0.5 else ABSTAIN
 
 from snorkel.labeling import LabelingFunction
 
-def keyword_lookup(x, keywords, label):
+def keyword_lookup(x, keywords, label): # keyword_lookup is a helper function that checks if any of the keywords are present in the text x.text
     if any(word in x.text.lower() for word in keywords):
         return label
-    return MIXED
+    return ABSTAIN
 
 def make_keyword_lf(keywords, label=NEGATIVE):  # Default label is now NEGATIVE
     return LabelingFunction(
@@ -79,8 +79,6 @@ def make_keyword_lf(keywords, label=NEGATIVE):  # Default label is now NEGATIVE
         f=keyword_lookup,
         resources=dict(keywords=keywords, label=label),
     )
-
-
 
 """Spam comments expressing negative sentiment like disappointment or frustration."""
 keyword_negative = make_keyword_lf(keywords=["سيء", "مزعج", "فاشل", "ممل", "كريه", "اكره"])
@@ -122,7 +120,7 @@ LFAnalysis(L=L_train, lfs=lfs).lf_summary()
 
 from snorkel.labeling.model import MajorityLabelVoter
 
-majority_model = MajorityLabelVoter()
+majority_model = MajorityLabelVoter() # The idea behind majority voting is that if a large number of labeling functions agree on a particular label, the model assigns that label to the data point. If there is no clear majority, the model may abstain or output a default label.
 preds_train = majority_model.predict(L=L_train)
 
 preds_train
@@ -155,6 +153,8 @@ df_train_filtered, probs_train_filtered = filter_unlabeled_dataframe(
     X=df_train, y=probs_train, L=L_train
 )
 
+df_train_filtered.head(5)
+
 from sklearn.feature_extraction.text import CountVectorizer
 
 vectorizer = CountVectorizer(ngram_range=(1, 5))
@@ -169,10 +169,12 @@ from sklearn.linear_model import LogisticRegression
 sklearn_model = LogisticRegression(C=1e3, solver="liblinear")
 sklearn_model.fit(X=X_train, y=preds_train_filtered)
 
+C = sklearn_model
+
 print(f"Test Accuracy: {sklearn_model.score(X=X_test, y=Y_test) * 100:.1f}%")
 
 # Example Arabic reviews for prediction
-new_review = ['قناتي رائعة! هذه افضل قناة على الإطلاق', 'الفيديو كان سيئ جدا', 'ممتاز نوع نظافه والموقع والتجهيز', 'الفيديو سيئ جدا']
+new_review = ['قناتي رائعة! هذه افضل قناة على الإطلاق', 'الفيديو كان سيئ جدا']
 
 # Create DataFrame from the new reviews
 df = pd.DataFrame(new_review, columns=['review'])
@@ -185,11 +187,12 @@ results = sklearn_model.predict(df_vectorized)
 
 for i, item in enumerate(results):
     if item == 0:
-        print(f'Review#{i+1}  is negative')  # 1 for negative sentiment
+        print(f'Review#{i+1} is negative')  # 1 for negative sentiment
     else:
         print(f'Review#{i+1} is positive')  # 0 for positive sentiment
 
 new_review
+
 
 # After training the model
 import joblib
