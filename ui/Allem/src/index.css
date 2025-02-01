@@ -1,0 +1,47 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@100;200;300;400;500;600;700&display=swap');
+
+@import "tailwindcss";
+
+/* Add the font to Tailwind's font family */
+@layer base {
+  html {
+    font-family: 'IBM Plex Sans Arabic', sans-serif;
+  }
+}
+
+@keyframes wordChange {
+  0%, 80% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  90%, 100% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+.word-animation {
+  opacity: 0;
+  position: absolute;
+  right: 0;
+  animation: wordChange 9s infinite;
+}
+
+.word-slide {
+  transition: transform 0.5s ease, opacity 0.5s ease;
+}
+
+.word-slide-enter {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.word-slide-active {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.word-slide-exit {
+  opacity: 0;
+  transform: translateY(-20px);
+}
